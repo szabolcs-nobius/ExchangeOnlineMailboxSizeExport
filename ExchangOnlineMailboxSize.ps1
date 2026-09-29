@@ -160,7 +160,7 @@ $excelPackage = $sortedReport | Export-Excel -Path $OutputPath `
 try {
 	$worksheet = $excelPackage.Workbook.Worksheets['Postaladak']
 	$worksheet.Column(6).Style.Numberformat.Format = '0'
-	$highlightColor = [System.Drawing.Color]::FromArgb(255, 242, 204)
+	$highlightColor = [System.Drawing.Color]::FromArgb(255, 0, 0)
 
 	for ($rowIndex = 0; $rowIndex -lt $sortedReport.Count; $rowIndex++) {
 		if ($null -ne $sortedReport[$rowIndex].SizeGB -and $sortedReport[$rowIndex].SizeGB -gt 30) {
