@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-	[string]$OutputPath = (Join-Path -Path (Get-Location) -ChildPath ("ExchangeMailboxReport_{0:yyyyMMdd_HHmmss}.xlsx" -f (Get-Date)))
+	[string]$OutputPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,12 +13,41 @@ foreach ($moduleName in @('ExchangeOnlineManagement', 'ImportExcel')) {
 	Import-Module $moduleName
 }
 
-if ([System.IO.Path]::GetExtension($OutputPath) -ne '.xlsx') {
-	throw 'Az OutputPath kiterjesztése .xlsx legyen.'
-}
-
 if (-not (Get-ConnectionInformation -ErrorAction SilentlyContinue)) {
 	Connect-ExchangeOnline -ShowBanner:$false
+}
+
+
+$organization = Get-OrganizationConfig
+$tenantName = [string]$organization.DisplayName
+if ([string]::IsNullOrWhiteSpace($tenantName)) {
+	$tenantName = [string]$organization.Name
+}
+if ([string]::IsNullOrWhiteSpace($tenantName)) {
+	throw 'Nem sikerült meghatározni a tenant nevét a riport fájlnevéhez.'
+}
+
+$tenantName = $tenantName -replace '[<>:"/\\|?*\x00-\x1F]', '_'
+if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+	$OutputPath = Join-Path -Path (Get-Location) -ChildPath ("{0}_ExchangeMailboxReport_{1:yyyyMMdd_HHmmss}.xlsx" -f $tenantName, (Get-Date))
+}
+else {
+	$outputDirectory = Split-Path -Path $OutputPath -Parent
+	$outputFileName = Split-Path -Path $OutputPath -Leaf
+	$tenantPrefix = "{0}_" -f $tenantName
+	if (-not $outputFileName.StartsWith($tenantPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+		$outputFileName = "{0}_{1}" -f $tenantName, $outputFileName
+	}
+	if ($outputDirectory) {
+		$OutputPath = Join-Path -Path $outputDirectory -ChildPath $outputFileName
+	}
+	else {
+		$OutputPath = $outputFileName
+	}
+}
+
+if ([System.IO.Path]::GetExtension($OutputPath) -ne '.xlsx') {
+	throw 'Az OutputPath kiterjesztése .xlsx legyen.'
 }
 
 function Convert-TotalItemSizeToBytes {
@@ -98,7 +127,7 @@ foreach ($mailbox in $mailboxes) {
 		$totalBytes = Convert-TotalItemSizeToBytes -TotalItemSize $statistics.TotalItemSize
 
 		$row.ItemCount = $statistics.ItemCount
-		$row.SizeGB = [math]::Round(($totalBytes / 1GB), 3)
+		$row.SizeGB = $totalBytes / 1GB
 	}
 	catch {
 		$row.Status = 'Hiba'
@@ -116,12 +145,35 @@ if ($outputDirectory -and -not (Test-Path -LiteralPath $outputDirectory)) {
 	New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 }
 
-$report | Export-Excel -Path $OutputPath `
+$sortedReport = @(
+	$report | Sort-Object -Property @{ Expression = { if ($null -eq $_.SizeGB) { -1.0 } else { $_.SizeGB } }; Descending = $true }
+)
+
+$excelPackage = $sortedReport | Export-Excel -Path $OutputPath `
 	-WorksheetName 'Postaladak' `
 	-TableName 'MailboxReport' `
 	-AutoSize `
 	-FreezeTopRow `
-	-BoldTopRow
+	-BoldTopRow `
+	-PassThru
+
+try {
+	$worksheet = $excelPackage.Workbook.Worksheets['Postaladak']
+	$worksheet.Column(6).Style.Numberformat.Format = '0'
+	$highlightColor = [System.Drawing.Color]::FromArgb(255, 242, 204)
+
+	for ($rowIndex = 0; $rowIndex -lt $sortedReport.Count; $rowIndex++) {
+		if ($null -ne $sortedReport[$rowIndex].SizeGB -and $sortedReport[$rowIndex].SizeGB -gt 30) {
+			$excelRow = $rowIndex + 2
+			$rowCells = $worksheet.Cells[$excelRow, 1, $excelRow, 8]
+			$rowCells.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+			$rowCells.Style.Fill.BackgroundColor.SetColor($highlightColor)
+		}
+	}
+}
+finally {
+	Close-ExcelPackage $excelPackage
+}
 
 Write-Host "Riport elkészült: $((Resolve-Path -LiteralPath $OutputPath).Path)"
 Write-Host "Postaládák: $($report.Count); sikeres: $(($report | Where-Object Status -eq 'OK').Count); hibás: $(($report | Where-Object Status -eq 'Hiba').Count)"
