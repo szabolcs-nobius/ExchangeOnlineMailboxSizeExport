@@ -2,15 +2,15 @@
 
 # Exchange Online postaládaméret-riport
 
-A szkript az Exchange Online tenant összes felhasználói (`UserMailbox`) és megosztott (`SharedMailbox`) postaládájához lekéri az elsődleges postaláda méretét és elemszámát, majd Excel-munkafüzetbe (`.xlsx`) exportálja az eredményt.
+A `ExchangOnlineMailboxSize.ps1` lekéri az Exchange Online tenant összes felhasználói (`UserMailbox`) és megosztott (`SharedMailbox`) postaládájának statisztikáját, majd Excel-munkafüzetbe exportálja. A riport postaládánként egy sort tartalmaz.
 
-## Előfeltételek
+## Követelmények
 
 - PowerShell 7.2 vagy újabb
-- Exchange Online lekérdezésére jogosító fiók
+- Exchange Online-ba bejelentkezni és postaláda-statisztikákat olvasni jogosult fiók
 - Az `ExchangeOnlineManagement` és az `ImportExcel` PowerShell-modul
 
-Telepítés:
+A modulok telepítése:
 
 ```powershell
 Install-Module ExchangeOnlineManagement -Scope CurrentUser
@@ -19,14 +19,28 @@ Install-Module ImportExcel -Scope CurrentUser
 
 ## Futtatás
 
+Az alapértelmezett riport létrehozásához futtasd a szkriptet:
+
 ```powershell
 ./ExchangOnlineMailboxSize.ps1
 ```
 
-Az első futtatáskor a szkript interaktívan csatlakozik az Exchange Online-hoz. Alapértelmezés szerint az aktuális mappába ír egy, a tenant nevével kezdődő fájlt, például `Contoso_ExchangeMailboxReport_20260929_120000.xlsx`. Egyedi útvonal esetén a megadott mappát és fájlnevet használja, a tenant nevét pedig automatikusan a fájlnév elé teszi:
+Ha nincs aktív Exchange Online-kapcsolat, a szkript interaktívan bejelentkeztet. Az Excel-fájl az aktuális mappába kerül, és a tenant nevével kezdődik, például `Contoso_ExchangeMailboxReport_20260929_120000.xlsx`.
+
+Egyedi fájl vagy mappa megadásakor a tenant neve automatikusan a fájlnév elé kerül. A fájl kiterjesztése `.xlsx` legyen:
 
 ```powershell
 ./ExchangOnlineMailboxSize.ps1 -OutputPath ./MailboxReport.xlsx
 ```
 
-A `SizeGB` oszlop értéke 1 GB = 1024³ bájttal számolódik, egész GB-ra kerekítve jelenik meg, és csökkenő méret szerint rendezi a sorokat. A 30 GB-nál nagyobb postaládák teljes sora kiemelt színt kap. A postaládánkénti lekérdezési hibák külön sorban, `Hiba` státusszal szerepelnek, így a többi postaláda exportja ettől még elkészül. Az archív postaládák mérete nem része ennek a riportnak.
+Ebben a példában a létrejövő fájl neve `Contoso_MailboxReport.xlsx`.
+
+## Riport tartalma
+
+- Megjelenített név, elsődleges e-mail-cím, felhasználónév és postaládatípus
+- Elemszám és postaládaméret GB-ban; a méret 1 GB = 1024³ bájt alapján számolódik, egész GB-ra kerekítve jelenik meg
+- Csökkenő sorrend a pontos méret szerint
+- A 30 GB-nál nagyobb postaládák teljes sora piros háttérrel kiemelve
+- `Status` és `Error` oszlop az egyes postaládák lekérdezési hibáihoz; egy postaláda hibája nem akadályozza meg a többi postaláda exportját
+
+A riport az elsődleges postaládákat tartalmazza; az archív postaládák mérete nem része az exportnak.
