@@ -1,3 +1,5 @@
+
+
 # Exchange Online postaládaméret-riport
 
 A szkript az Exchange Online tenant összes felhasználói (`UserMailbox`) és megosztott (`SharedMailbox`) postaládájához lekéri az elsődleges postaláda méretét és elemszámát, majd Excel-munkafüzetbe (`.xlsx`) exportálja az eredményt.
